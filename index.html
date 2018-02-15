@@ -238,10 +238,7 @@
                 }
             });
             */
-            const test = JSON.stringify({
-                name: 'test',
-                arg: 'test'
-            });
+            const commands = JSON.stringify(command_list);
 
             $.ajax({
                 url: "https://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
@@ -252,7 +249,7 @@
                 dataType: 'json',
                 type: 'post',
                 contentType: 'application/json',
-                data: test,
+                data: commands,
                 success: function(data, textStatus, jQxhr) {
                     $('#response pre').html(data);
                 },
