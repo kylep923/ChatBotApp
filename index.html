@@ -238,12 +238,20 @@
                 }
             });
             */
+            const test = {
+                name: 'test',
+                arg: 'test'
+            };
+
             $.ajax({
                 url: "https://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                headers: {
+                    'Access-Control-Allow-Origin': '*'
+                },
                 dataType: 'json',
                 type: 'post',
                 contentType: 'application/json',
-                data: command_list,
+                data: test,
                 success: function(data, textStatus, jQxhr) {
                     $('#response pre').html(data);
                 },
@@ -263,7 +271,7 @@
             if (csv == "") {
                 return ""
             }
-            var session_attribute_array = [] = SessionAttributes.split(",");
+            var session_attribute_array = SessionAttributes.split(",");
             var session_attribute_string = '{'
             for (var x = 0; x < session_attribute_array.length; x++) {
                 var current_value = session_attribute_array[x].split(":");
@@ -330,21 +338,25 @@
                 }
             }, function(data) {
                 console.log('Transcript: ', JSON.stringify(data.inputTranscript), ", Response: ", JSON.stringify(data.message));
-                if (data.slots.command_slot && data.slots.command_slot != "ERROR") {
-                    console.log(JSON.stringify(data.slots.command_slot));
-                    console.log('command found');
-                    command_list = [];
-                    command_obj = {}
-                    command_obj["name"] = "command";
-                    command_obj["arg"] = data.slots.command_slot;
-                    command_list.push(command_obj)
-                    command_str = JSON.stringify(command_list);
-                    // send command to device here -- ask avery for direction here --
-                    console.log(command_list);
-                    sendDeviceCommand(device_id, command_list, api_key);
+                if (data.slots != undefined) {
+                    if (data.slots.command_slot && data.slots.command_slot != "ERROR") {
+                        console.log(JSON.stringify(data.slots.command_slot));
+                        console.log('command found');
+                        command_list = [];
+                        command_obj = {}
+                        command_obj["name"] = "command";
+                        command_obj["arg"] = data.slots.command_slot;
+                        command_list.push(command_obj)
+                        command_str = JSON.stringify(command_list);
+                        // send command to device here -- ask avery for direction here --
+                        console.log(command_list);
+                        sendDeviceCommand(device_id, command_list, api_key);
 
+                    } else {
+                        console.log('command not found');
+                    }
                 } else {
-                    console.log('command not found');
+                    console.log('No slots');
                 }
             }, function(error) {
                 message.textContent = error;
