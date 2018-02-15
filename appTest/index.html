@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>AmazonLex</title>
+    <meta name="author" content="lafranch">
+    <meta name="description" content="Lex Runtime example from the browser.">
+    <meta name="keywords" content="Amazon Lex, SDK, Runtime, Browser, JavaScript">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/kylep923/ChatBotGadget/master/img/favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/kylep923/ChatBotGadget/master/img/favicon-16x16.png" sizes="16x16" />
+
+    <style>
+        .white-circle {
+            cursor: pointer;
+            border-radius: 100px;
+            height: 100%;
+            margin: 0 auto;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0);
+        }
+        
+        .white-circle img {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+        
+        .audio-control {
+            position: fixed;
+            top: 10%;
+            left: 10%;
+            right: 10%;
+            bottom: 10%;
+            text-align: center;
+        }
+        
+        body {
+            font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+            line-height: 21px;
+            color: #444;
+            font-size: 20px;
+            font-weight: 400;
+            background-color: rgba(0, 0, 0, 0);
+        }
+        
+        canvas {
+            height: 100px;
+            width: 100vw;
+            margin-top: -50px;
+            display: block;
+            position: fixed;
+            top: 50%;
+            left: 0;
+            z-index: -1;
+            background-color: rgba(0, 0, 0, 0);
+        }
+    </style>
+</head>
+
+<body class="wrapper">
+    <div class="audio-control">
+        <p id="audio-control" class="white-circle">
+            <!-- <img src="__UP_img_url__"> -->
+            <img src="../img/lex.png">
+            <canvas class="visualizer"></canvas>
+            <span id="message"></span>
+        </p>
+    </div>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.48.0.min.js"></script>
+    <script src="https://cdn.rawgit.com/kylep923/ChatBotGadget/master/dist/aws-lex-audio.min.js" type="text/javascript"></script>
+    <!-- <script src="https://cdn.rawgit.com/kylep923/ChatBotGadget/master/dist/aws-lex-audio.js" type="text/javascript"></script> -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+
+    <script type="text/javascript">
+        (function() {
+            'use strict';
+            var canvas = document.querySelector('.visualizer');
+            var canvasCtx = canvas.getContext('2d');
+            var listening = true;
+
+            /**
+             * Will render an audio buffer as wave form. Right now, it expects 
+             * a canvas element to be on the page with class name "visualizer".
+             */
+            window.Waveform = function() {
+                /**
+                 * Clears the canvas element.
+                 */
+                var clearCanvas = function() {
+                    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                    listening = false;
+                };
+
+                /**
+                 * Sets the listening flag to true.
+                 */
+                var prepCanvas = function() {
+                    listening = true;
+                };
+
+                /**
+                 * Clears the canvas and draws the dataArray. 
+                 * @param {Uint8Array} dataArray - The time domain audio data to visualize.
+                 * @param {number} bufferLength - The FFT length.
+                 */
+                var visualizeAudioBuffer = function(dataArray, bufferLength) {
+                    var WIDTH = canvas.width;
+                    var HEIGHT = canvas.height;
+                    var animationId;
+                    canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+                    /**
+                     * Will be called at about 60 times per second. If listening, draw the dataArray. 
+                     */
+                    function draw() {
+                        if (!listening) {
+                            return;
+                        }
+
+                        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+                        canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+                        canvasCtx.lineWidth = 1;
+                        canvasCtx.strokeStyle = 'rgb(0,125,188)';
+                        canvasCtx.beginPath();
+
+                        var sliceWidth = WIDTH * 1.0 / bufferLength;
+                        var x = 0;
+
+                        for (var i = 0; i < bufferLength; i++) {
+                            var v = dataArray[i] / 128.0;
+                            var y = v * HEIGHT / 2;
+                            if (i === 0) {
+                                canvasCtx.moveTo(x, y);
+                            } else {
+                                canvasCtx.lineTo(x, y);
+                            }
+                            x += sliceWidth;
+                        }
+
+                        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+                        canvasCtx.stroke();
+                    }
+
+                    // Register our draw function with requestAnimationFrame. 
+                    if (typeof animationId === 'undefined') {
+                        animationId = requestAnimationFrame(draw);
+                    }
+                };
+                return {
+                    clearCanvas: clearCanvas,
+                    prepCanvas: prepCanvas,
+                    visualizeAudioBuffer: visualizeAudioBuffer
+                };
+            };
+        })();
+    </script>
+
+    <script type="text/javascript">
+        //var prefs = new gadgets.Prefs();
+        var AccessID = "AKIAJWI5GCENNPPUNA2A"; //prefs.getString("access_id");
+        var SecretKey = "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"; //prefs.getString("secret_key");
+        var BotName = "ScheduleAppointment"; //prefs.getString("bot_name");
+        var SessionAttributes = "apiKey:8FYmwxXYXU_kd11xclK0HQ,gridName:WestAcersDemo"; //prefs.getString("session_attributes");
+        var device_id = '';
+        var api_key = "8FYmwxXYXU_kd11xclK0HQ";
+
+
+        function assignDeviceId(device_name, data) {
+            account_device_list = data;
+            //console.log(account_device_list);
+            device_id = '';
+            for (var x = 0; x < account_device_list.length; x++) {
+                console.log("ID: " + account_device_list[x].id + " Name: " + account_device_list[x].name);
+                if (device_name == account_device_list[x].name) {
+                    device_id = account_device_list[x].id;
+                    console.log(device_id);
+                }
+            }
+        }
+
+        function getDeviceId(device_name, user_api_key) {
+            $.ajax({
+                url: "https://api.reveldigital.com/api/devices/?api_key=" + user_api_key,
+                type: 'GET',
+                dataType: 'json',
+                success: function(res) {
+                    assignDeviceId(device_name, res);
+                },
+                error: function(XMLHttpRequest, textStatus, errorThrown) {
+                    alert("Error: Invalid API Key.");
+                    console.log("failed call");
+                }
+            });
+        }
+
+        function sendDeviceCommand(device_id, command_list, user_api_key) {
+            /*
+            $.ajax({
+                url: "http://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                type: 'POST',
+                dataType: 'text/json',
+                success: function(res) {
+                    console.log(res);
+                },
+                error: function(XMLHttpRequest, textStatus, errorThrown) {
+                    //alert("Error: Invalid POST.");
+                    console.log("failed call");
+                }
+            });
+            
+            $.ajax({
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                'type': 'POST',
+                'url': "http://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                'data': command_list,
+                'dataType': 'json',
+                'success': console.log("SUCCESS")
+            });
+            
+            $.ajax({
+                type: "POST",
+                url: "http://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                // The key needs to match your method's input parameter (case-sensitive).
+                data: command_list,
+                contentType: "application/json; charset=utf-8",
+                crossDomain: true,
+                dataType: "jsonp",
+                success: function(data) {
+                    alert(data);
+                },
+                failure: function(errMsg) {
+                    alert(errMsg);
+                }
+            });
+            */
+            $.ajax({
+                url: "http://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                dataType: 'json',
+                type: 'post',
+                contentType: 'application/json',
+                data: command_list,
+                success: function(data, textStatus, jQxhr) {
+                    $('#response pre').html(data);
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        }
+
+        getDeviceId("ChatBotDemo", "8FYmwxXYXU_kd11xclK0HQ");
+        console.log(device_id);
+
+
+        function csvToJSON(csv) {
+            // Construct json string for session attributes
+            // ------------------------ FINISH & TEST THIS -----------------------------------
+            if (csv == "") {
+                return ""
+            }
+            var session_attribute_array = [] = SessionAttributes.split(",");
+            var session_attribute_string = '{'
+            for (var x = 0; x < session_attribute_array.length; x++) {
+                var current_value = session_attribute_array[x].split(":");
+                var value_string = '"' + current_value[0] + '":"' + current_value[1] + '"';
+                if (x == session_attribute_array.length - 1) {
+                    session_attribute_string = session_attribute_string + value_string
+                } else {
+                    session_attribute_string = session_attribute_string + value_string + ",";
+                }
+            }
+            session_attribute_string = session_attribute_string + '}'
+            return session_attribute_string
+                //--------------------------------------------------------------------------------
+        }
+
+
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            // Provide your Pool Id here
+            IdentityPoolId: 'us-east-1:64b7df76-83e1-47b2-8c44-86d49e88978c',
+        });
+
+        var lexruntime = new AWS.LexRuntime();
+        var lexUserId = 'chatbot-demo' + Date.now();
+        //var sessionAttributes = {};
+
+        var waveform = window.Waveform();
+        var message = document.getElementById('message');
+        var config, conversation;
+        message.textContent = 'Passive';
+        var flag = false;
+        var flag2 = false;
+        var globalLexConfig;
+        document.getElementById('audio-control').onclick = function() {
+
+            // prefs here
+            AWS.config.credentials = new AWS.Credentials(AccessID, SecretKey, null);
+            AWS.config.region = 'us-east-1';
+
+            config_string = '{"lexConfig":{"sessionAttributes":' + csvToJSON(SessionAttributes) + ', "botName":"' + BotName + '"}}';
+            //console.log(config_string);
+            config = JSON.parse(config_string);
+
+            conversation = new LexAudio.conversation(config, function(state) {
+                message.textContent = state + '...';
+                //console.log(state);
+                //console.log(config['lexConfig'].inputStream);
+                globalLexConfig = config['lexConfig'];
+                if (state === 'Listening') {
+                    waveform.prepCanvas();
+                    if (flag) {
+                        //pushChat(config['lexConfig'], 'root canal');
+                        config['lexConfig'].contentType = "text/plain; charset=utf-8";
+                        config['lexConfig'].inputStream = null;
+                        console.log(conversation);
+                        flag = false;
+                        flag2 = true;
+                        waveform.clearCanvas();
+                        //config['lexConfig'].inputStream = 'root canal';
+                    }
+                }
+                if (state === 'Sending') {
+                    waveform.clearCanvas();
+                }
+            }, function(data) {
+                console.log('Transcript: ', JSON.stringify(data.inputTranscript), ", Response: ", JSON.stringify(data.message));
+                if (data.slots.command_slot && data.slots.command_slot != "ERROR") {
+                    console.log(JSON.stringify(data.slots.command_slot));
+                    console.log('command found');
+                    command_list = [];
+                    command_obj = {}
+                    command_obj["name"] = "command";
+                    command_obj["arg"] = data.slots.command_slot;
+                    command_list.push(command_obj)
+                    command_str = JSON.stringify(command_list);
+                    // send command to device here -- ask avery for direction here --
+                    console.log(command_list);
+                    sendDeviceCommand(device_id, command_list, api_key);
+
+                } else {
+                    console.log('command not found');
+                }
+            }, function(error) {
+                message.textContent = error;
+                console.log(error);
+            }, function(timeDomain, bufferLength) {
+                waveform.visualizeAudioBuffer(timeDomain, bufferLength);
+            });
+            conversation.advanceConversation();
+        };
+    </script>
+</body>
+
+</html>
