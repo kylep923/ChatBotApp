@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+<Module> 
+<ModulePrefs title="Wayfinding Gadget" description="" author="Revel Digital" background="transparent">
+  <UserPref name="access_id" display_name="AWS Access ID" datatype="string" default_value="" required="true" />
+  <UserPref name="secret_key" display_name="AWS Secret Key" datatype="string" default_value="" required="true"/>
+  <UserPref name="bot_name" display_name="Name of Lex Bot" datatype="string" default_value="ScheduleAppointment"/>
+  <UserPref name="session_attributes" display_name="Session Attributes (Format: 'name:value,name2:value2,...)" datatype="string" default_value=""/>
+  <UserPref name="img_url" display_name="URL for button image" datatype="string" default_value="https://uploads.cdn.reveldigital.com/389153!talk%20icon4.png"/>
+  <!-->
+  <UserPref name="pulseColor" display_name="Pulse Color (hex value)" datatype="string" default_value="#02ffff"/>
+  <UserPref name="pathWidth" display_name="Path Width (integer value)" datatype="string" default_value="3"/>
+  <UserPref name="showButtons" display_name="Show Buttons?" datatype="bool" default_value="true"/> 
+  -->
+     
+  <!-- The following preferences should not be modified -->
+  <UserPref name="ForeColor" datatype="hidden" />
+  <UserPref name="BackColor" datatype="hidden" />
+  <UserPref name="rdW" display_name="Width" required="true" default_value="280" datatype="hidden" />
+  <UserPref name="rdH" display_name="Height" required="true" default_value="190" datatype="hidden" />
+  <UserPref name="rdKey" display_name="Device Registration Key" default_value="*|DEVICE.REGISTRATIONKEY|*" datatype="hidden" />
+</ModulePrefs>
+<Content type="html">
+<![CDATA[
+
+<head>
+    <meta charset="UTF-8">
+    <title>AmazonLex</title>
+    <meta name="author" content="lafranch">
+    <meta name="description" content="Lex Runtime example from the browser.">
+    <meta name="keywords" content="Amazon Lex, SDK, Runtime, Browser, JavaScript">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/kylep923/ChatBotGadget/master/img/favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/kylep923/ChatBotGadget/master/img/favicon-16x16.png" sizes="16x16" />
+
+    <style>
+        .white-circle {
+            cursor: pointer;
+            border-radius: 100px;
+            height: 100%;
+            margin: 0 auto;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0);
+        }
+        
+        .white-circle img {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+        
+        .audio-control {
+            position: fixed;
+            top: 10%;
+            left: 10%;
+            right: 10%;
+            bottom: 10%;
+            text-align: center;
+        }
+        
+        body {
+            font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+            line-height: 21px;
+            color: #444;
+            font-size: 20px;
+            font-weight: 400;
+            background-color: rgba(0, 0, 0, 0);
+        }
+        
+        canvas {
+            height: 100px;
+            width: 100vw;
+            margin-top: -50px;
+            display: block;
+            position: fixed;
+            top: 50%;
+            left: 0;
+            z-index: -1;
+            background-color: rgba(0, 0, 0, 0);
+        }
+    </style>
+</head>
+
+<body class="wrapper">
+    <div class="audio-control">
+        <p id="audio-control" class="white-circle">
+            <!-- <img src="__UP_img_url__"> -->
+            <img src="img/lex.png">
+            <canvas class="visualizer"></canvas>
+            <span id="message"></span>
+        </p>
+    </div>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.48.0.min.js"></script>
+    <script src="https://cdn.rawgit.com/kylep923/ChatBotGadget/master/dist/aws-lex-audio.min.js" type="text/javascript"></script>
+    <!-- <script src="https://cdn.rawgit.com/kylep923/ChatBotGadget/master/dist/aws-lex-audio.js" type="text/javascript"></script> -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+
+    <script type="text/javascript">
+        (function() {
+            'use strict';
+            var canvas = document.querySelector('.visualizer');
+            var canvasCtx = canvas.getContext('2d');
+            var listening = true;
+
+            /**
+             * Will render an audio buffer as wave form. Right now, it expects 
+             * a canvas element to be on the page with class name "visualizer".
+             */
+            window.Waveform = function() {
+                /**
+                 * Clears the canvas element.
+                 */
+                var clearCanvas = function() {
+                    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                    listening = false;
+                };
+
+                /**
+                 * Sets the listening flag to true.
+                 */
+                var prepCanvas = function() {
+                    listening = true;
+                };
+
+                /**
+                 * Clears the canvas and draws the dataArray. 
+                 * @param {Uint8Array} dataArray - The time domain audio data to visualize.
+                 * @param {number} bufferLength - The FFT length.
+                 */
+                var visualizeAudioBuffer = function(dataArray, bufferLength) {
+                    var WIDTH = canvas.width;
+                    var HEIGHT = canvas.height;
+                    var animationId;
+                    canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+                    /**
+                     * Will be called at about 60 times per second. If listening, draw the dataArray. 
+                     */
+                    function draw() {
+                        if (!listening) {
+                            return;
+                        }
+
+                        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+                        canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+                        canvasCtx.lineWidth = 1;
+                        canvasCtx.strokeStyle = 'rgb(0,125,188)';
+                        canvasCtx.beginPath();
+
+                        var sliceWidth = WIDTH * 1.0 / bufferLength;
+                        var x = 0;
+
+                        for (var i = 0; i < bufferLength; i++) {
+                            var v = dataArray[i] / 128.0;
+                            var y = v * HEIGHT / 2;
+                            if (i === 0) {
+                                canvasCtx.moveTo(x, y);
+                            } else {
+                                canvasCtx.lineTo(x, y);
+                            }
+                            x += sliceWidth;
+                        }
+
+                        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+                        canvasCtx.stroke();
+                    }
+
+                    // Register our draw function with requestAnimationFrame. 
+                    if (typeof animationId === 'undefined') {
+                        animationId = requestAnimationFrame(draw);
+                    }
+                };
+                return {
+                    clearCanvas: clearCanvas,
+                    prepCanvas: prepCanvas,
+                    visualizeAudioBuffer: visualizeAudioBuffer
+                };
+            };
+        })();
+    </script>
+
+    <script type="text/javascript">
+        var prefs = new gadgets.Prefs();
+        var AccessID = prefs.getString("access_id");
+        var SecretKey = prefs.getString("secret_key");
+        var BotName = prefs.getString("bot_name");
+        var SessionAttributes = prefs.getString("session_attributes");
+        var api_key = prefs.getString("api_key");
+        var device_id = '';
+
+
+        function assignDeviceId(device_name, data) {
+            account_device_list = data;
+            //console.log(account_device_list);
+            device_id = '';
+            for (var x = 0; x < account_device_list.length; x++) {
+                console.log("ID: " + account_device_list[x].id + " Name: " + account_device_list[x].name);
+                if (device_name == account_device_list[x].name) {
+                    device_id = account_device_list[x].id;
+                    console.log(device_id);
+                }
+            }
+        }
+
+        function getDeviceId(device_name, user_api_key) {
+            $.ajax({
+                url: "https://api.reveldigital.com/api/devices/?api_key=" + user_api_key,
+                type: 'GET',
+                dataType: 'json',
+                success: function(res) {
+                    assignDeviceId(device_name, res);
+                },
+                error: function(XMLHttpRequest, textStatus, errorThrown) {
+                    alert("Error: Invalid API Key.");
+                    console.log("failed call");
+                }
+            });
+        }
+
+        function sendDeviceCommand(device_id, command_list, user_api_key) {
+
+            const commands = JSON.stringify(command_list);
+
+            $.ajax({
+                url: "https://api.reveldigital.com/api/devices/" + device_id + "/commands?api_key=" + user_api_key,
+                headers: {
+                    'Access-Control-Allow-Origin': '*'
+                },
+                crossDomain: true,
+                dataType: 'json',
+                type: 'post',
+                contentType: 'application/json',
+                data: commands,
+                success: function(data, textStatus, jQxhr) {
+                    $('#response pre').html(data);
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        }
+
+        getDeviceId("Test", "t-BUS9VmQcuY4_2o6M8lHQ");
+        console.log(device_id);
+
+
+        function csvToJSON(csv) {
+            // Construct json string for session attributes
+            // ------------------------ FINISH & TEST THIS -----------------------------------
+            if (csv == "") {
+                return ""
+            }
+            var session_attribute_array = SessionAttributes.split(",");
+            var session_attribute_string = '{'
+            for (var x = 0; x < session_attribute_array.length; x++) {
+                var current_value = session_attribute_array[x].split(":");
+                var value_string = '"' + current_value[0] + '":"' + current_value[1] + '"';
+                if (x == session_attribute_array.length - 1) {
+                    session_attribute_string = session_attribute_string + value_string
+                } else {
+                    session_attribute_string = session_attribute_string + value_string + ",";
+                }
+            }
+            session_attribute_string = session_attribute_string + '}'
+            return session_attribute_string
+                //--------------------------------------------------------------------------------
+        }
+
+
+        AWS.config.region = 'us-east-1';
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+            // Provide your Pool Id here
+            IdentityPoolId: 'us-east-1:64b7df76-83e1-47b2-8c44-86d49e88978c',
+        });
+
+        var lexruntime = new AWS.LexRuntime();
+        var lexUserId = 'chatbot-demo' + Date.now();
+        //var sessionAttributes = {};
+
+        var waveform = window.Waveform();
+        var message = document.getElementById('message');
+        var config, conversation;
+        message.textContent = 'Passive';
+        var flag = false;
+        var flag2 = false;
+        var globalState = '';
+        document.getElementById('audio-control').onclick = function() {
+            console.log('Current State: ' + globalState);
+            if (globalState === 'Listening' || globalState === 'Sending' || globalState === 'Speaking') {
+                console.log(globalState);
+                return;
+            }
+            // prefs here
+            AWS.config.credentials = new AWS.Credentials(AccessID, SecretKey, null);
+            AWS.config.region = 'us-east-1';
+
+            config_string = '{"lexConfig":{"sessionAttributes":' + csvToJSON(SessionAttributes) + ', "botName":"' + BotName + '"}}';
+            //console.log(config_string);
+            config = JSON.parse(config_string);
+
+            conversation = new LexAudio.conversation(config, function(state) {
+                globalState = state;
+                console.log(globalState);
+                message.textContent = state + '...';
+                //console.log(state);
+                //console.log(config['lexConfig'].inputStream);
+                globalLexConfig = config['lexConfig'];
+                if (state === 'Listening') {
+                    waveform.prepCanvas();
+                    if (flag) {
+                        //pushChat(config['lexConfig'], 'root canal');
+                        config['lexConfig'].contentType = "text/plain; charset=utf-8";
+                        config['lexConfig'].inputStream = null;
+                        console.log(conversation);
+                        flag = false;
+                        flag2 = true;
+                        waveform.clearCanvas();
+                        //config['lexConfig'].inputStream = 'root canal';
+                    }
+                }
+                if (state === 'Sending') {
+                    waveform.clearCanvas();
+                }
+            }, function(data) {
+                console.log('Transcript: ', JSON.stringify(data.inputTranscript), ", Response: ", JSON.stringify(data.message));
+                if (data.slots != undefined) {
+                    if (data.slots.LocationTypevalue) {
+                        wayfinding_list = [];
+                        wayfinding_obj = {};
+                        wayfinding_obj['name'] = "wayfinding";
+                        wayfinding_obj['arg'] = data.slots.LocationTypevalue;
+                        wayfinding_list.push(wayfinding_obj);
+                        console.log(wayfinding_list);
+                        sendDeviceCommand(device_id, wayfinding_list, api_key);
+                    }
+                    if (data.slots.command_slot && data.slots.command_slot != "ERROR") {
+                        console.log(JSON.stringify(data.slots.command_slot));
+                        console.log('command found');
+                        command_list = [];
+                        command_obj = {}
+                        command_obj["name"] = "command";
+                        var arg = data.slots.command_slot;
+                        command_obj["arg"] = arg.toLowerCase();
+                        command_list.push(command_obj)
+                        command_str = JSON.stringify(command_list);
+                        // send command to device here -- ask avery for direction here --
+                        console.log(command_list);
+                        sendDeviceCommand(device_id, command_list, api_key);
+
+                    } else {
+                        console.log('command not found');
+                    }
+                } else {
+                    console.log('No slots');
+                }
+            }, function(error) {
+                message.textContent = error;
+                console.log(error);
+            }, function(timeDomain, bufferLength) {
+                waveform.visualizeAudioBuffer(timeDomain, bufferLength);
+            });
+            conversation.advanceConversation();
+        };
+    </script>
+</body>
+
+]]>
+</Content>
+</Module>
