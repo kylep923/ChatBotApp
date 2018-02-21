@@ -65,7 +65,6 @@
         canvas {
             height: 50%;
             width: 100vw;
-            margin-top: -50px;
             display: block;
             position: fixed;
             top: 25%;
