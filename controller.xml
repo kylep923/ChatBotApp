@@ -63,15 +63,19 @@
         }
         
         canvas {
-            height: 100px;
+            height: 500px;
             width: 100vw;
             margin-top: -50px;
             display: block;
             position: fixed;
-            top: 50%;
+            top: 25%;
             left: 0;
             z-index: -1;
             background-color: rgba(0, 0, 0, 0);
+        }
+        h1 {
+            font-size: 90px;
+            width: 100%;
         }
     </style>
 </head>
@@ -81,7 +85,7 @@
         <p id="audio-control" class="white-circle">
             <img src="__UP_img_url__">
             <canvas class="visualizer"></canvas>
-            <span id="message"></span>
+            <h1 id="message"></h1>
         </p>
     </div>
     <script src="https://sdk.amazonaws.com/js/aws-sdk-2.48.0.min.js"></script>
@@ -140,6 +144,7 @@
                         canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
                         canvasCtx.lineWidth = 1;
                         canvasCtx.strokeStyle = 'rgb(0,125,188)';
+                        canvasCtx.lineWidth = 3;
                         canvasCtx.beginPath();
 
                         var sliceWidth = WIDTH * 1.0 / bufferLength;
